@@ -30,7 +30,7 @@ def main():
     try:
         data_collectors = fetch_data_collectors()
     except Exception as exc:
-        LOG.error('Something went wrong fetching data collectors.\n' + str(exc))
+        LOG.exception('Something went wrong fetching data collectors.')
         exit(-1)
 
     LOG.info(f"Found {len(data_collectors)} data collectors")
@@ -63,11 +63,14 @@ def main():
                 collector.connect()
             collectors.append(collector)
     connection.close()
+    LOG.info(f"Connected to {len(collectors)} collectors")
 
+    LOG.info("Starting check_data_collectors_status thread...")
     thread = Thread(target=check_data_collectors_status)
     thread.setDaemon(True)
     thread.start()
 
+    LOG.info("Starting consumer...")
     consumer()
 
 
@@ -117,7 +120,7 @@ def check_data_collectors_status():
                         channel.basic_publish(exchange='', routing_key='data_collectors_status_events', body=body)
 
                     except Exception as e:
-                        LOG.error("Error when sending status update to queue: " + str(e) + "Collector ID: " + str(
+                        LOG.exception("Error when sending status update to queue: " + repr(e) + "Collector ID: " + str(
                             collector_id))
 
                     collectors_dict_connected[collector_id] = collector.connected
@@ -131,7 +134,7 @@ def check_data_collectors_status():
             connection.close()
 
         except Exception as exc:
-            LOG.error('Error in publish: ' + str(exc))
+            LOG.exception('Error in publish:')
 
         time.sleep(5)
 
@@ -140,7 +143,7 @@ def handle_events(ch, method, properties, body):
     try:
         event = json.loads(body.decode('utf-8'))
     except Exception as exc:
-        LOG.error("Couldn\'t deserialize event. Exception: {0}".format(exc))
+        LOG.exception("Couldn\'t deserialize event.")
 
         return
 
@@ -156,7 +159,7 @@ def handle_events(ch, method, properties, body):
                 collectors_dict_verified[data_collector_id] = False
 
         except Exception as exc:
-            LOG.error("Error when create new Collector. Exception: {0}".format(exc))
+            LOG.exception("Error when create new Collector.")
 
     elif event_type == 'DELETED':
         try:
@@ -169,7 +172,7 @@ def handle_events(ch, method, properties, body):
             close_connection(data_collector_id)
 
         except Exception as exc:
-            LOG.error("Error when delete new Collector. Exception: {0}".format(exc))
+            LOG.exception("Error when delete new Collector.")
 
     elif event_type == 'ENABLED':
         try:
@@ -178,7 +181,7 @@ def handle_events(ch, method, properties, body):
                 collector.disabled = False
             collectors_dict_connected[data_collector_id] = 'DISCONNECTED'
         except Exception as exc:
-            LOG.error("Error when enable new Collector. Exception: {0}".format(exc))
+            LOG.exception("Error when enable new Collector.")
 
     elif event_type == 'DISABLED':
         disable_collector(data_collector_id)
@@ -209,8 +212,8 @@ def handle_events(ch, method, properties, body):
             channel.basic_publish(exchange='', routing_key='data_collectors_status_events', body=status_event.encode('utf-8'))
             connection.close()
         except Exception as e:
-            LOG.error(
-                "Error when sending status update to queue in UPDATE event: " + str(e) + "Collector ID: " + str(
+            LOG.exception(
+                "Error when sending status update to queue in UPDATE event: " + repr(e) + "Collector ID: " + str(
                     data_collector_id))
 
         for collector in create_collector(event.get('data')):
@@ -225,7 +228,7 @@ def handle_events(ch, method, properties, body):
                 collector.test()
 
         except Exception as exc:
-            LOG.error("Error when testing Collector. Exception: %s" % (exc))
+            LOG.exception("Error when testing Collector.")
 
     elif event_type == 'FAILED_VERIFY':
         LOG.error(event.get('message'))
@@ -241,7 +244,7 @@ def disable_collector(data_collector_id):
         del collectors_dict_verified[data_collector_id]
         close_connection(data_collector_id)
     except Exception as exc:
-        LOG.error("Error when disable new Collector. Exception: {0}".format(exc))
+        LOG.exception("Error when disable new Collector.")
 
 
 def create_collector(dc):

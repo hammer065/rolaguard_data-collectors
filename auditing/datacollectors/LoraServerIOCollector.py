@@ -3,7 +3,6 @@
 
 import sys
 import argparse
-import traceback
 import json
 import re
 import time
@@ -196,7 +195,7 @@ class LoraServerIOCollector(BaseCollector):
         try:
             mqtt_messsage = json.loads(msg.payload.decode("utf-8"))
         except Exception as e:
-            self.log.error(f'payload could not be decoded as utf8: {e}')
+            self.log.exception('payload could not be decoded as utf8:')
 
             return False
 
@@ -219,7 +218,7 @@ class LoraServerIOCollector(BaseCollector):
 
             return True
         except Exception as e:
-            self.log.error(f'Error parsing physical payload: {e}')
+            self.log.exception(f'Error parsing physical payload:')
 
             return False
 
@@ -261,7 +260,7 @@ class LoraServerIOCollector(BaseCollector):
                     mqtt_messsage= json.loads(MessageToJson(uplink))
                     is_protobuf_message= True
                 except Exception as e:
-                    self.log.error(f'Error parsing protobuf: {e}. Protobuf message: {msg.payload}')
+                    self.log.exception(f'Error parsing protobuf: {e!r}. Protobuf message: {msg.payload}')
             else:
                 # it seems like we're not correctly handling the information received. TODO
                 try:
@@ -270,7 +269,7 @@ class LoraServerIOCollector(BaseCollector):
                     mqtt_messsage= json.loads(MessageToJson(uplink))
                     is_protobuf_message= True
                 except Exception as e:
-                    self.log.error(f'Error parsing protobuf: {e}. Protobuf message: {msg.payload}')
+                    self.log.exception(f'Error parsing protobuf: {e!r}. Protobuf message: {msg.payload}')
                 return
 
         # self.log.debug(mqtt_messsage)
@@ -518,9 +517,8 @@ class LoraServerIOCollector(BaseCollector):
                 client.packet_writter_message = self.init_packet_writter_message()
 
         except Exception as e:
-            self.log.error("Error creating Packet in Chirpstack collector:", e, "Topic: ", msg.topic, "Message: ",
+            self.log.exception("Error creating Packet in Chirpstack collector:", repr(e), "Topic: ", msg.topic, "Message: ",
                       json.dumps(mqtt_messsage) if is_protobuf_message else msg.payload.decode("utf-8"))
-            traceback.print_exc(file=sys.stdout)
             save_parsing_error(client.data_collector_id, json.dumps(mqtt_messsage) if is_protobuf_message else msg.payload.decode("utf-8"))
 
     def on_connect(self, client, userdata, flags, rc):
@@ -532,9 +530,10 @@ class LoraServerIOCollector(BaseCollector):
 
             return
         else:
+            self.log.info(f"Subscribing {client.host} to topics: {client.topics!r}")
             client.subscribe(client.topics)
             self.connected = "CONNECTED"
-        self.log.info("Connected to: {} with result code: {}".format(client.host, rc))
+        self.log.info(f"Connected to: {client.host} with result code: {rc}")
 
     def on_disconnect(self, client, userdata, rc):
         if self.being_tested:
@@ -542,7 +541,7 @@ class LoraServerIOCollector(BaseCollector):
 
         if rc != 0:
             self.connected = "DISCONNECTED"
-            self.log.info("Unexpected disconnection.")
+            self.log.info(f"Unexpected disconnection from: {client.host} with result code: {rc}")
 
 def get_crc_status_integer(status_string):
     # This mapping is in https://github.com/brocaar/chirpstack-api/blob/master/protobuf/gw/gw.proto
@@ -671,6 +670,6 @@ if __name__ == '__main__':
         try:
             commit()
         except Exception as exc:
-            self.log.error('Error at commit:' + str(exc))
+            self.log.exception('Error at commit:')
             self.log.info('Rolling back the session')
             rollback()
